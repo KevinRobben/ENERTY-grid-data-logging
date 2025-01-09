@@ -1,16 +1,30 @@
 import sys
 import os
-import _thread as thread
-
-
 import logging
 import time
+from module_m_decoder import ModuleM
 
-# Configure logging to send messages to stdout (captured by systemd)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 logging.info("starting gridconnection_watcher.py")
 
-time.sleep(5)
+module_m = ModuleM()
 
-raise ValueError("Grid connection not found")
+def update():
+    if module_m._read_data() and module_m._decode_data():
+        pass
+
+
+def update_from_github():
+    logging.info("updating gridconnection_watcher.py")
+    os.system("sudo git pull")
+    os.system("sudo systemctl restart gridconnection_watcher.service")
+
+
+
+if __name__ == "__main__":
+    # Configure logging to send messages to stdout (captured by systemd)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    
+    while True:
+        update()
+        time.sleep(0.3)
