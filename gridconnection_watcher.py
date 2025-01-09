@@ -22,6 +22,7 @@ def update_from_github():
 
 
 if __name__ == "__main__":
+    time.sleep(5) # sleep 5 seconds at startup. If we crash, we overload systemD with too many restarts when not sleeping
     # Configure logging to send messages to stdout (captured by systemd)
     logging.basicConfig(level=logging.INFO, format='%(message)s')
     
