@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Check if the script is run with sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "Error: This script must be run with sudo."
+    echo "Usage: sudo bash $0"
+    exit 1
+fi
+
 echo "Starting installation of gridconnection watcher..."
 
 # Detect the script directory
@@ -86,3 +93,4 @@ else
 fi
 
 echo "Installation finished successfully!"
+echo "Use \"sudo journalctl -u gridconnection_watcher.service -f\" to view logs."
