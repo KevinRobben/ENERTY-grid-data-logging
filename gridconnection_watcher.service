@@ -1,0 +1,15 @@
+[unit]
+Description=gridconnection watcher
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kevin/ENERTY-GRID-DATA-LOGGING/
+ExecStart=sudo python /home/kevin/ENERTY-GRID-DATA-LOGGING/gridconnection_watcher.py
+KillSignal=SIGINT
+Restart=on-failure
+User=root
+
+
+[Install]
+WantedBy=multi-user.target
