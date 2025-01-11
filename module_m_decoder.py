@@ -69,7 +69,7 @@ class VictronSerialAmpsAndVoltage:
 class ModuleM:
 
     def __init__(self):
-        self.ser = serial.Serial(None, 9600, timeout=0, rtscts=False, dsrdtr=False, xonxoff=False)
+        self.ser = None
         self.datagram = b""
         self.serialnumber = None
         self.mmdata = VictronSerialAmpsAndVoltage()
@@ -90,12 +90,13 @@ class ModuleM:
         except Exception as e: # attribute error is thrown when no port passed to serial.Serial
             logging.info("Serial port closed")
             self.mmregistered = False
-            if self.ser.port is not None and self.ser.is_open:
-                self.ser.close()
+            if self.ser is not None:
+                if self.ser.port is not None and self.ser.is_open:
+                    self.ser.close()
             for port in serial.tools.list_ports.comports():
                 if port.vid == VID and port.pid == PID:
                     port_name = port.name
-                    self.ser.port = port_name
+                    self.ser = serial.Serial(port_name, 9600, timeout=0, rtscts=False, dsrdtr=False, xonxoff=False)
                     self.new_port_name = True
                     logging.info(f"Found Module M on {port_name}")
                     self.ser.open()
