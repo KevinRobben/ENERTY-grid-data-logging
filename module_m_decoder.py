@@ -96,7 +96,11 @@ class ModuleM:
             for port in serial.tools.list_ports.comports():
                 if port.vid == VID and port.pid == PID:
                     port_name = port.name
-                    self.ser = serial.Serial(port_name, 9600, timeout=0, rtscts=False, dsrdtr=False, xonxoff=False)
+                    try:
+                        self.ser = serial.Serial(port_name, 9600, timeout=0, rtscts=False, dsrdtr=False, xonxoff=False)
+                    except serial.SerialException as e:
+                        logging.error(f'Could not open serial port: { e.args[0]}')
+                        return False
                     self.new_port_name = True
                     logging.info(f"Found Module M on {port_name}")
                     self.ser.open()
