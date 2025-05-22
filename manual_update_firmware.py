@@ -14,6 +14,9 @@ import yaml
 BAUDRATE = 115200
 UF2_TIMEOUT = 60  # seconds
 MOUNT_BASE = "/media/esp32"
+BOOT_COMMAND_TIMEOUT = 5  # seconds to wait for response
+BOOT_COMMAND_RETRY_DELAY = 3  # seconds to wait before retrying
+MAX_BOOT_RETRIES = 5  # maximum number of retries for boot command
 
 
 def find_serial_port():
@@ -24,14 +27,55 @@ def find_serial_port():
     return ports[0]
 
 def send_boot_command(serial_port):
-    try:
-        with serial.Serial(serial_port, BAUDRATE, timeout=1) as ser:
-            print("[*] Sending '$D' to ESP32...")
-            ser.write(b'$D')
-            time.sleep(1)
-    except serial.SerialException as e:
-        print(f"[!] Serial error: {e}")
-        exit(1)
+    """Send boot command and verify response with retry logic"""
+    for attempt in range(MAX_BOOT_RETRIES):
+        try:
+            with serial.Serial(serial_port, BAUDRATE, timeout=BOOT_COMMAND_TIMEOUT) as ser:
+                # Clear any existing data in the buffer
+                ser.reset_input_buffer()
+                
+                print(f"[*] Attempt {attempt + 1}/{MAX_BOOT_RETRIES}: Sending '$D' to ESP32...")
+                ser.write(b'$D')
+                ser.flush()  # Ensure data is sent immediately
+                
+                # Read response with timeout
+                start_time = time.time()
+                response_buffer = b''
+                
+                while time.time() - start_time < BOOT_COMMAND_TIMEOUT:
+                    if ser.in_waiting > 0:
+                        chunk = ser.read(ser.in_waiting)
+                        response_buffer += chunk
+                        
+                        # Convert to string for checking
+                        response_str = response_buffer.decode('utf-8', errors='ignore')
+                        print(f"[*] Received: {response_str.strip()}")
+                        
+                        # Check if we got the expected response
+                        if "Triggering bootloader" in response_str:
+                            print("[+] Bootloader trigger confirmed!")
+                            return True
+                    
+                    time.sleep(0.1)  # Small delay to avoid busy waiting
+                
+                # If we get here, we didn't receive the expected response
+                response_str = response_buffer.decode('utf-8', errors='ignore')
+                if response_str.strip():
+                    print(f"[!] Unexpected response: {response_str.strip()}")
+                else:
+                    print("[!] No response received from ESP32")
+                
+        except serial.SerialException as e:
+            print(f"[!] Serial error on attempt {attempt + 1}: {e}")
+        
+        # Wait before retrying (except on the last attempt)
+        if attempt < MAX_BOOT_RETRIES - 1:
+            print(f"[*] Waiting {BOOT_COMMAND_RETRY_DELAY} seconds before retry...")
+            time.sleep(BOOT_COMMAND_RETRY_DELAY)
+    
+    # If we get here, all attempts failed
+    print(f"[!] Failed to trigger bootloader after {MAX_BOOT_RETRIES} attempts")
+    return False
 
 def wait_for_usb_drive():
     print("[*] Waiting for ESP32 USB drive to appear...")
@@ -110,7 +154,10 @@ def main():
     serial_port = find_serial_port()
     print(f"[*] Found serial port: {serial_port}")
 
-    send_boot_command(serial_port)
+    # Send boot command with response verification
+    if not send_boot_command(serial_port):
+        print("[!] Failed to trigger bootloader. Exiting.")
+        exit(1)
 
     mount_point = wait_for_usb_drive()
     if not mount_point:
