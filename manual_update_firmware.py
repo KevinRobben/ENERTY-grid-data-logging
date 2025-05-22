@@ -11,7 +11,7 @@ import yaml
 
 
 
-BAUDRATE = 115200
+BAUDRATE = 9600
 UF2_TIMEOUT = 60  # seconds
 MOUNT_BASE = "/media/esp32"
 BOOT_COMMAND_TIMEOUT = 5  # seconds to wait for response

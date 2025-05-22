@@ -5,7 +5,7 @@ This project builds uppon the Enerty-Module-M energy meter, to verify its data w
 
 
 # activate virtual enviroment
-chmod +x venv_activate.sh
+chmod +x venv_acitvate.sh
 ./venv_acitvate.sh
 
 
