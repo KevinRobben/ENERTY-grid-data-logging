@@ -5,6 +5,7 @@ This project builds uppon the Enerty-Module-M energy meter, to verify its data w
 
 
 # activate virtual enviroment
+(first install: python3 -m venv myenv)
 chmod +x venv_acitvate.sh
 ./venv_acitvate.sh
 
@@ -31,3 +32,13 @@ run dos2unix manual_update_firmware.py
 If dos2unix is not installed, install it first:
 sudo apt update
 sudo apt install dos2unix
+
+
+# setup a new rbpi
+- Get a rbpi 4
+- Install pios lite 64 bit
+- Install git: sudo apt install git-all
+- Install tailscale: https://tailscale.com/kb/1174/install-debian-bookworm
+- Enable tailscale Auto-Start on Boot: sudo systemctl enable tailscaled
+- Install pip: sudo apt-get update and sudo apt-get install python-pip
+- clone this repo:  git clone https://github.com/KevinRobben/ENERTY-grid-data-logging.git
