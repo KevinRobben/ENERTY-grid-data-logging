@@ -137,6 +137,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+myenv/
 
 # Spyder project settings
 .spyderproject
@@ -171,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+# enerty firmware
+firmware.uf2
