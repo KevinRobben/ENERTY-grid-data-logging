@@ -39,6 +39,7 @@ sudo apt install dos2unix
 - Install git: sudo apt install git-all
 - Install tailscale: https://tailscale.com/kb/1174/install-debian-bookworm
 - Enable tailscale Auto-Start on Boot: sudo systemctl enable tailscaled
+- Enable remote ssh from browser and vscode: tailscale set --ssh
 - Install pip: sudo apt-get update and sudo apt-get install python-pip
 - clone this repo:  git clone https://github.com/KevinRobben/ENERTY-grid-data-logging.git
 - set username and email:
