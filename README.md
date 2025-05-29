@@ -42,3 +42,6 @@ sudo apt install dos2unix
 - Enable tailscale Auto-Start on Boot: sudo systemctl enable tailscaled
 - Install pip: sudo apt-get update and sudo apt-get install python-pip
 - clone this repo:  git clone https://github.com/KevinRobben/ENERTY-grid-data-logging.git
+- set username and email:
+    git config --global user.name "GITHUB USERNAME" 
+    git config --global user.email "GITHUM EMAIL"
