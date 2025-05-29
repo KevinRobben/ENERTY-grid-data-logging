@@ -14,8 +14,7 @@ chmod +x venv_acitvate.sh
 active the virtual enviroment
 
 make sure that "github_token" is added to user_data.yaml
-on linux run chmod +x manual_update_firmware.py
-on linux run ./manual_update_firmware.py "https://github.com/KevinRobben/ENERTY-Module-M/blob/main/dist/flash_esp32s2_V2.0.6.uf2"
+on linux run python ./manual_update_firmware.py "https://github.com/KevinRobben/ENERTY-Module-M/blob/main/dist/flash_esp32s2_V2.0.6.uf2"
 
 change the link to the uf2 file that you want to upload.
 on windows run python ./manual_update_firmware.py "https://github.com/KevinRobben/ENERTY-Module-M/blob/main/dist/flash_esp32s2_V2.0.6.uf2"
