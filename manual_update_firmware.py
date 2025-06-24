@@ -28,6 +28,18 @@ def find_serial_port(indent=""):
         raise IndexError("No serial ports found")
     return ports[0]
 
+def stop_serial_starter(port_name):
+    if not WINDOWS:
+        port_name = port_name.split('/')[-1] # just in case we send dev/port_name
+        try:
+            subprocess.run(["/opt/victronenergy/serial-starter/stop-tty.sh", port_name])
+        except subprocess.CalledProcessError as e:
+            # Handle cases where the command fails
+            print(f"[!] Stop serial starter command CalledProcessError with return code: {e.returncode}")
+        except FileNotFoundError:
+            # Handle case where the script is not found
+            print("[!] The stop serial starter command or script does not exist. Please check the path.")
+
 def send_boot_command(serial_port, indent=""):
     """Send boot command and verify response with retry logic"""
     for attempt in range(MAX_BOOT_RETRIES):
@@ -412,6 +424,9 @@ def main():
         # ESP32 not in UF2 mode, trigger bootloader
         serial_port = find_serial_port()
         print(f"[*] Found serial port: {serial_port}")
+
+        # for victron gx, we need to stop the serial starter service
+        stop_serial_starter(serial_port)
 
         # get the current firmware version
         print("[*] Checking current firmware version...")
