@@ -59,6 +59,18 @@ def stop_serial_starter(port_name):
             # Handle case where the script is not found
             print("[!] The stop serial starter command or script does not exist. Please check the path.")
 
+def start_serial_starter(port_name):
+    if not WINDOWS:
+        port_name = port_name.split('/')[-1] # just in case we send dev/port_name
+        try:
+            subprocess.run(["/opt/victronenergy/serial-starter/start-tty.sh", port_name])
+        except subprocess.CalledProcessError as e:
+            # Handle cases where the command fails
+            print(f"[!] Start serial starter command CalledProcessError with return code: {e.returncode}")
+        except FileNotFoundError:
+            # Handle case where the script is not found
+            print("[!] The start serial starter command or script does not exist. Please check the path.")
+
 def send_boot_command(serial_port, indent=""):
     """Send boot command and verify response with retry logic"""
     for attempt in range(MAX_BOOT_RETRIES):
@@ -454,13 +466,18 @@ def main():
         print("[*] Triggering bootloader...")
         if not send_boot_command(serial_port, indent="   |"):
             print("[!] Failed to trigger bootloader. Exiting.")
+            start_serial_starter(serial_port)
             exit(1)
 
         # Wait for the USB drive to appear after triggering bootloader
         device_path = wait_for_usb_drive(indent="   |")
         if not device_path:
             print("[!] USB drive not detected after bootloader trigger. Exiting.")
+            start_serial_starter(serial_port)
             exit(1)
+        
+        # Start the serial starter service again, as ESP32 is now in UF2 mode
+        start_serial_starter(serial_port)
 
     # Mount the USB drive and flash firmware with retry logic
     print("[*] Mounting USB drive and flashing firmware...")
