@@ -337,13 +337,12 @@ def wait_for_drive_to_disappear(device_path):
 
 def load_github_token(path='user_data.yaml'):
     try:
-        with open(path, 'r') as f:
-            data = simple_yaml_load(f)
-            token = data.get('github_token')
-            if not token:
-                print("[!] Token not found in YAML file.")
-                exit(1)
-            return token
+        data = simple_yaml_load(path)
+        token = data.get('github_token')
+        if not token:
+            print("[!] Token not found in YAML file.")
+            exit(1)
+        return token
     except FileNotFoundError:
         print(f"[!] Token file {path} not found.")
         exit(1)
