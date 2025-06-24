@@ -16,7 +16,7 @@ BOOT_COMMAND_TIMEOUT = 5  # seconds to wait for response
 BOOT_COMMAND_RETRY_DELAY = 3  # seconds to wait before retrying
 MAX_BOOT_RETRIES = 5  # maximum number of retries for boot command
 MAX_FIRMWARE_RETRIES = 3  # maximum number of retries for firmware version check
-
+WINDOWS = os.name == 'nt'
 
 def simple_yaml_load(filepath):
     """Simple YAML parser for basic key-value pairs"""
