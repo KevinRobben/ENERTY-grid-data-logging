@@ -6,9 +6,6 @@ import argparse
 import serial
 import requests
 import glob
-import sys
-import yaml
-
 
 
 BAUDRATE = 9600
@@ -20,6 +17,28 @@ BOOT_COMMAND_RETRY_DELAY = 3  # seconds to wait before retrying
 MAX_BOOT_RETRIES = 5  # maximum number of retries for boot command
 MAX_FIRMWARE_RETRIES = 3  # maximum number of retries for firmware version check
 
+
+def simple_yaml_load(filepath):
+    """Simple YAML parser for basic key-value pairs"""
+    data = {}
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Remove quotes if present
+                    if value.startswith('"') and value.endswith('"'):
+                        value = value[1:-1]
+                    elif value.startswith("'") and value.endswith("'"):
+                        value = value[1:-1]
+                    data[key] = value
+    except FileNotFoundError:
+        print(f"[!] YAML file {filepath} not found.")
+        exit(1)
+    return data
 
 def find_serial_port(indent=""):
     ports = glob.glob('/dev/ttyACM*')
@@ -319,7 +338,7 @@ def wait_for_drive_to_disappear(device_path):
 def load_github_token(path='user_data.yaml'):
     try:
         with open(path, 'r') as f:
-            data = yaml.safe_load(f)
+            data = simple_yaml_load(f)
             token = data.get('github_token')
             if not token:
                 print("[!] Token not found in YAML file.")
