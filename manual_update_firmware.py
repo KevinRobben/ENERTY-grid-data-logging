@@ -18,28 +18,6 @@ MAX_BOOT_RETRIES = 5  # maximum number of retries for boot command
 MAX_FIRMWARE_RETRIES = 3  # maximum number of retries for firmware version check
 WINDOWS = os.name == 'nt'
 
-def simple_yaml_load(filepath):
-    """Simple YAML parser for basic key-value pairs"""
-    data = {}
-    try:
-        with open(filepath, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and ':' in line:
-                    key, value = line.split(':', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    # Remove quotes if present
-                    if value.startswith('"') and value.endswith('"'):
-                        value = value[1:-1]
-                    elif value.startswith("'") and value.endswith("'"):
-                        value = value[1:-1]
-                    data[key] = value
-    except FileNotFoundError:
-        print(f"[!] YAML file {filepath} not found.")
-        exit(1)
-    return data
-
 def find_serial_port(indent=""):
     ports = glob.glob('/dev/ttyACM*')
     if not ports:
@@ -284,10 +262,9 @@ def unmount_drive(mount_point):
     except subprocess.CalledProcessError as e:
         print(f"[!] Failed to unmount drive: {e}")
 
-def download_firmware(github_url, token, output_file="firmware.uf2"):
+def download_firmware(github_url, output_file="firmware.uf2"):
     print(f"[*] Downloading firmware from GitHub...")
-    headers = {'Authorization': f'token {token}'}
-    r = requests.get(github_url, headers=headers, stream=True)
+    r = requests.get(github_url, stream=True)
     if r.status_code == 200:
         with open(output_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
@@ -346,18 +323,6 @@ def wait_for_drive_to_disappear(device_path):
     
     print("[!] Drive did not disappear in time.")
     return False
-
-def load_github_token(path='user_data.yaml'):
-    try:
-        data = simple_yaml_load(path)
-        token = data.get('github_token')
-        if not token:
-            print("[!] Token not found in YAML file.")
-            exit(1)
-        return token
-    except FileNotFoundError:
-        print(f"[!] Token file {path} not found.")
-        exit(1)
 
 def convert_to_raw_url(github_url):
     if "github.com" in github_url and "/blob/" in github_url:
@@ -431,17 +396,16 @@ def cleanup_mount_point():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("github_url", help="Direct link to UF2 file in private GitHub repo")
+    parser.add_argument("github_url", help="Direct link to UF2 file in public GitHub repo")
     args = parser.parse_args()
 
     # Clean up any existing mounts
     cleanup_mount_point()
 
     github_url = convert_to_raw_url(args.github_url)
-    github_token = load_github_token()
 
     # Download firmware
-    download_firmware(github_url, github_token)
+    download_firmware(github_url)
 
     # Check if ESP32 is already in UF2 mode
     print("[*] Checking if ESP32 is already in UF2 bootloader mode...")
