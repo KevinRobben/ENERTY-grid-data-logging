@@ -19,450 +19,312 @@ MAX_FIRMWARE_RETRIES = 3  # maximum number of retries for firmware version check
 WINDOWS = os.name == 'nt'
 
 def find_serial_port(indent=""):
+    """Find the first available /dev/ttyACM port."""
     ports = glob.glob('/dev/ttyACM*')
     if not ports:
         print(f"[!]{indent} No /dev/ttyACM* devices found.")
         raise IndexError("No serial ports found")
     return ports[0]
 
-def stop_serial_starter(port_name):
+def stop_serial_starter(port_name, indent=""):
+    """Stops the Victron serial-starter service for a given port. Runs without sudo."""
     if not WINDOWS:
         port_name = port_name.split('/')[-1] # just in case we send dev/port_name
         try:
-            subprocess.run(["/opt/victronenergy/serial-starter/stop-tty.sh", port_name])
+            # This script is specific to Victron VenusOS
+            subprocess.run(["/opt/victronenergy/serial-starter/stop-tty.sh", port_name], check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
-            # Handle cases where the command fails
-            print(f"[!] Stop serial starter command CalledProcessError with return code: {e.returncode}")
+            print(f"[!]{indent} Stop serial starter command failed with return code: {e.returncode}")
         except FileNotFoundError:
-            # Handle case where the script is not found
-            print("[!] The stop serial starter command or script does not exist. Please check the path.")
+            print(f"[*]{indent} The stop serial starter script does not exist. Skipping.")
 
-def start_serial_starter(port_name):
+def start_serial_starter(port_name, indent=""):
+    """Starts the Victron serial-starter service for a given port. Runs without sudo."""
     if not WINDOWS:
         port_name = port_name.split('/')[-1] # just in case we send dev/port_name
         try:
-            subprocess.run(["/opt/victronenergy/serial-starter/start-tty.sh", port_name])
+            # This script is specific to Victron VenusOS
+            subprocess.run(["/opt/victronenergy/serial-starter/start-tty.sh", port_name], check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
-            # Handle cases where the command fails
-            print(f"[!] Start serial starter command CalledProcessError with return code: {e.returncode}")
+            print(f"[!]{indent} Start serial starter command failed with return code: {e.returncode}")
         except FileNotFoundError:
-            # Handle case where the script is not found
-            print("[!] The start serial starter command or script does not exist. Please check the path.")
+            print(f"[*]{indent} The start serial starter script does not exist. Skipping.")
 
 def send_boot_command(serial_port, indent=""):
-    """Send boot command and verify response with retry logic"""
+    """Send boot command and verify response with retry logic."""
     for attempt in range(MAX_BOOT_RETRIES):
         try:
             with serial.Serial(serial_port, BAUDRATE, timeout=BOOT_COMMAND_TIMEOUT) as ser:
-                # Clear any existing data in the buffer
                 ser.reset_input_buffer()
                 
                 print(f"[*]{indent} Attempt {attempt + 1}/{MAX_BOOT_RETRIES}: Sending '$D' to ESP32...")
                 ser.write(b'$D')
-                ser.flush()  # Ensure data is sent immediately
+                ser.flush()
                 
-                # Read response with timeout
                 start_time = time.time()
-                response_buffer = b''
-                
                 while time.time() - start_time < BOOT_COMMAND_TIMEOUT:
                     try:
                         if ser.in_waiting > 0:
-                            chunk = ser.read(ser.in_waiting)
-                            response_buffer += chunk
-                            
-                            # Convert to string for checking
-                            response_str = response_buffer.decode('utf-8', errors='ignore')
-                            
-                            
-                            # Check if we got the expected response
-                            if "Triggering bootloader" in response_str:
+                            response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
+                            print(f"[*]{indent} Received: {response.strip()}")
+                            if "Triggering bootloader" in response:
                                 print(f"[+]{indent} Bootloader trigger confirmed!")
                                 return True
-                            else:
-                                for line in response_str.splitlines():
-                                    print(f"[*]{indent} Received: {line.strip()}")
-                    except OSError as e:
-                        print(f"[*]{indent} Serial connection disconnected, bootloader trigger is likely successful")
+                    except OSError:
+                        print(f"[*]{indent} Serial connection disconnected, bootloader trigger is likely successful.")
                         return True
-                    
-                    time.sleep(0.1)  # Small delay to avoid busy waiting
-                
-                # If we get here, we didn't receive the expected response
-                response_str = response_buffer.decode('utf-8', errors='ignore')
-                if response_str.strip():
-                    print(f"[!]{indent} Unexpected response: {response_str.strip()}")
-                else:
-                    print(f"[!]{indent} No response received from ESP32")
-                
+                    time.sleep(0.1)
+                print(f"[!]{indent} No response or incorrect response received.")
         except serial.SerialException as e:
             print(f"[!]{indent} Serial error on attempt {attempt + 1}: {e}")
         
-        # Wait before retrying (except on the last attempt)
         if attempt < MAX_BOOT_RETRIES - 1:
             print(f"[*]{indent} Waiting {BOOT_COMMAND_RETRY_DELAY} seconds before retry...")
             time.sleep(BOOT_COMMAND_RETRY_DELAY)
     
-    # If we get here, all attempts failed
-    print(f"[!]{indent} Failed to trigger bootloader after {MAX_BOOT_RETRIES} attempts")
+    print(f"[!]{indent} Failed to trigger bootloader after {MAX_BOOT_RETRIES} attempts.")
     return False
 
-
 def get_firmware_version(serial_port, indent=""):
-    """Send version command and verify response with retry logic"""
+    """Send version command '$K' and parse the response with retry logic."""
     for attempt in range(MAX_FIRMWARE_RETRIES):
         try:
             with serial.Serial(serial_port, BAUDRATE, timeout=BOOT_COMMAND_TIMEOUT) as ser:
-                # Clear any existing data in the buffer
                 ser.reset_input_buffer()
-                
                 print(f"[*]{indent} Attempt {attempt + 1}/{MAX_FIRMWARE_RETRIES}: Sending '$K' to ESP32...")
                 ser.write(b'$K')
-                ser.flush()  # Ensure data is sent immediately
+                ser.flush()
                 
-                # Read response with timeout
-                start_time = time.time()
-                response_buffer = b''
+                time.sleep(0.5) # Give time for a response
                 
-                while time.time() - start_time < BOOT_COMMAND_TIMEOUT:
-                    try:
-                        if ser.in_waiting > 0:
-                            chunk = ser.read(ser.in_waiting)
-                            response_buffer += chunk
-                            
-                            # Convert to string for checking
-                            response_str = response_buffer.decode('utf-8', errors='ignore')
-                            # Check if we got the expected response
-                            if len(response_str.splitlines()) == 1:
-                                print(f"[*]{indent} Received: {response_str.strip()}")
-                                break  # No firmware version available, just a debug command response
+                response_lines = []
+                while ser.in_waiting > 0:
+                    line = ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        response_lines.append(line)
 
-                            # firmware version is the next line "vx.x.x" after recieved debug command
-                            if "recieved debug command" in response_str:
-                                print(f"[+]{indent} firmware version: {response_str.splitlines()[1].strip()}")
-                                return response_str.splitlines()[1].strip()
-                            
-                    except OSError as e:
-                        print(f"[*]{indent} Serial connection disconnected")
-                        return False
-                    
-                    time.sleep(0.1)  # Small delay to avoid busy waiting
-                
-                print(f"[!]{indent} No response received from ESP32")
-                
+                if len(response_lines) >= 2 and "recieved debug command" in response_lines[0]:
+                    version = response_lines[1]
+                    print(f"[+]{indent} Firmware version: {version}")
+                    return version
+                elif response_lines:
+                     print(f"[*]{indent} Received: {' '.join(response_lines)}")
+
         except serial.SerialException as e:
             print(f"[!]{indent} Serial error on attempt {attempt + 1}: {e}")
         
-        # Wait before retrying (except on the last attempt)
         if attempt < MAX_FIRMWARE_RETRIES - 1:
-            print(f"[*]{indent} Waiting {2} seconds before retry...")
+            print(f"[*]{indent} Waiting {BOOT_COMMAND_RETRY_DELAY} seconds before retry...")
             time.sleep(BOOT_COMMAND_RETRY_DELAY)
-    
-    # If we get here, all attempts failed
-    print(f"[!]{indent} Failed to get firmware version after {MAX_FIRMWARE_RETRIES} attempts")
-    return False
+            
+    print(f"[!]{indent} Failed to get firmware version after {MAX_FIRMWARE_RETRIES} attempts.")
+    return None
 
-
-def check_for_drive_label(target_label="ENERTYMBOOT"):
-    """
-    Check if a device with the specified label is present
-    Returns device path if found, None otherwise
-    """
+def check_for_drive_label(target_label="ENERTYMBOOT", indent=""):
+    """Check for a device label using blkid. NOTE: Runs without sudo."""
     try:
-        # Run blkid to get all block device info in JSON format
-        result = subprocess.run(['sudo', 'blkid', '-o', 'export'], 
-                              capture_output=True, text=True, check=True)
-        
-        # Parse blkid output (key=value pairs separated by blank lines)
-        devices = []
-        current_device = {}
-        
-        for line in result.stdout.strip().split('\n'):
-            if line.strip() == '':
-                if current_device:
-                    devices.append(current_device)
-                    current_device = {}
-            else:
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    current_device[key] = value
-        
-        # Don't forget the last device
-        if current_device:
-            devices.append(current_device)
-        
-        # Look for our target label
-        for device in devices:
-            if device.get('LABEL') == target_label or device.get('LABEL_FATBOOT') == target_label:
-                return device.get('DEVNAME')
-                
-    except subprocess.CalledProcessError as e:
-        print(f"Error running blkid: {e}")
+        # Since this script is run as root, sudo is not needed here.
+        result = subprocess.run(['blkid', '-o', 'export'], capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            # blkid can return non-zero if no devices are found. This is not a fatal error.
+            return None
+
+        for line in result.stdout.strip().split('\n\n'):
+            if not line: continue
+            device_info = dict(item.split('=', 1) for item in line.split('\n') if '=' in item)
+            if device_info.get('LABEL') == target_label or device_info.get('LABEL_FATBOOT') == target_label:
+                return device_info.get('DEVNAME')
+    except FileNotFoundError:
+        print(f"[!]{indent} 'blkid' command not found. Is it installed and in your PATH?")
     except Exception as e:
-        print(f"Error parsing blkid output: {e}")
-    
+        print(f"[!]{indent} Error parsing blkid output: {e}")
     return None
 
 def wait_for_usb_drive(indent=""):
-    print("[*] Waiting for ESP32 USB drive to appear...")
+    """Wait for the ESP32's UF2 USB drive to appear."""
+    print(f"[*]{indent} Waiting for ESP32 USB drive to appear...")
     start_time = time.time()
     while time.time() - start_time < UF2_TIMEOUT:
-        device_path = check_for_drive_label()
+        device_path = check_for_drive_label(indent=indent)
         if device_path:
             print(f"[+]{indent} Found USB drive at {str(device_path).strip()}")
             return device_path
         time.sleep(1)
     return None
 
-def mount_drive(device_path):
-    """Mount the UF2 drive and return the mount point"""
-    # Create mount point if it doesn't exist
+def mount_drive(device_path, indent=""):
+    """Mount the UF2 drive. NOTE: Runs without sudo."""
+    os.makedirs(MOUNT_BASE, exist_ok=True)
+    if os.path.ismount(MOUNT_BASE):
+        print(f"[*] {MOUNT_BASE} is already a mount point. Unmounting first.")
+        unmount_drive(MOUNT_BASE, indent)
+
     try:
-        os.makedirs(MOUNT_BASE, exist_ok=True)
-        print(f"[*] Created mount point at {MOUNT_BASE}")
-    except PermissionError:
-        print(f"[!] Permission denied creating {MOUNT_BASE}")
-        print("[!] Trying to create mount point with sudo...")
-        try:
-            subprocess.run(['sudo', 'mkdir', '-p', MOUNT_BASE], check=True)
-            print(f"[*] Created mount point at {MOUNT_BASE} with sudo")
-        except subprocess.CalledProcessError as e:
-            print(f"[!] Failed to create mount point: {e}")
-            return None
-    
-    # Check if already mounted
-    try:
-        result = subprocess.run(['mount'], capture_output=True, text=True)
-        if device_path in result.stdout and MOUNT_BASE in result.stdout:
-            print(f"[*] Drive already mounted at {MOUNT_BASE}")
-            return MOUNT_BASE
-    except:
-        pass
-    
-    # Mount the drive with proper permissions
-    try:
-        print(f"[*] Mounting {device_path} to {MOUNT_BASE}...")
-        # Mount with user permissions for FAT filesystem
-        uid = os.getuid()
-        gid = os.getgid()
+        print(f"[*]{indent} Mounting {device_path} to {MOUNT_BASE}...")
+        # Since this script is run as root, sudo is not needed here.
+        uid, gid = 0, 0 # Run as root
         mount_options = f"uid={uid},gid={gid},umask=0000"
-        subprocess.run(['sudo', 'mount', '-o', mount_options, device_path, MOUNT_BASE], check=True)
-        print(f"[+] Drive mounted successfully at {MOUNT_BASE}")
+        subprocess.run(['mount', '-o', mount_options, device_path, MOUNT_BASE], check=True)
+        print(f"[+]{indent} Drive mounted successfully at {MOUNT_BASE}")
         return MOUNT_BASE
     except subprocess.CalledProcessError as e:
-        print(f"[!] Failed to mount drive: {e}")
+        print(f"[!]{indent} Failed to mount drive: {e}")
         return None
 
-def unmount_drive(mount_point):
-    """Safely unmount the drive"""
+def unmount_drive(mount_point, indent=""):
+    """Unmount the drive. NOTE: Runs without sudo."""
+    if not os.path.ismount(mount_point):
+        return
     try:
-        print(f"[*] Unmounting {mount_point}...")
-        subprocess.run(['sudo', 'umount', mount_point], check=True)
-        print("[+] Drive unmounted successfully")
+        print(f"[*]{indent} Unmounting {mount_point}...")
+        # Since this script is run as root, sudo is not needed here.
+        subprocess.run(['umount', mount_point], check=True)
+        print(f"[+]{indent} Drive unmounted successfully")
     except subprocess.CalledProcessError as e:
-        print(f"[!] Failed to unmount drive: {e}")
+        print(f"[!]{indent} Failed to unmount drive: {e}")
 
 def download_firmware(github_url, output_file="firmware.uf2"):
-    print(f"[*] Downloading firmware from GitHub...")
-    r = requests.get(github_url, stream=True)
-    if r.status_code == 200:
+    """Download firmware from a given URL."""
+    print(f"[*] Downloading firmware from {github_url}...")
+    try:
+        r = requests.get(github_url, stream=True, timeout=30)
+        r.raise_for_status()
         with open(output_file, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-        print("[+] Firmware downloaded.")
-    else:
-        print(f"[!] Failed to download firmware: {r.status_code}")
-        exit(1)
+        print(f"[+] Firmware downloaded to {output_file}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"[!] Failed to download firmware: {e}")
+        return False
 
 def copy_firmware_to_drive(uf2_path, mount_point, indent=""):
-    """Copy firmware file to the mounted UF2 drive"""
-    if not os.path.ismount(mount_point):
-        print(f"[!]{indent} {mount_point} is not a valid mount point")
-        return False
-    
+    """Copy firmware to the drive. NOTE: Runs without sudo."""
     dest_path = os.path.join(mount_point, os.path.basename(uf2_path))
     print(f"[*]{indent} Copying firmware to {dest_path}...")
-    
-    # Check if we can write to the mount point
-    if not os.access(mount_point, os.W_OK):
-        print(f"[*]{indent} Using sudo for copy operation due to permission restrictions...")
-        try:
-            subprocess.run(["sudo", "cp", uf2_path, dest_path], check=True)
-            print(f"[+]{indent} Firmware copied successfully with sudo.")
-        except subprocess.CalledProcessError as e:
-            print(f"[!]{indent} Failed to copy firmware with sudo: {e}")
-            return False
-    else:
-        try:
-            subprocess.run(["cp", uf2_path, dest_path], check=True)
-            print(f"[+]{indent} Firmware copied successfully.")
-        except subprocess.CalledProcessError as e:
-            print(f"[!]{indent} Failed to copy firmware: {e}")
-            return False
-    
-    # Sync to ensure write is complete
     try:
+        # Since this script is run as root, sudo is not needed here.
+        subprocess.run(["cp", uf2_path, dest_path], check=True)
         subprocess.run(["sync"], check=True)
-        print(f"[+]{indent} File system synced.")
+        print(f"[+]{indent} Firmware copied and synced successfully.")
+        return True
     except subprocess.CalledProcessError as e:
-        print(f"[!]{indent} Failed to sync filesystem: {e}")
-    
-    return True
+        print(f"[!]{indent} Failed to copy or sync firmware: {e}")
+        return False
 
-def wait_for_drive_to_disappear(device_path):
-    """Wait for the UF2 drive to disappear (indicating successful flash)"""
-    print("[*] Waiting for ESP32 to reboot and drive to disappear...")
+def wait_for_drive_to_disappear(indent=""):
+    """Wait for the UF2 drive to disappear after flashing."""
+    print(f"[*]{indent} Waiting for ESP32 to reboot and drive to disappear...")
     start_time = time.time()
-    
     while time.time() - start_time < UF2_TIMEOUT:
-        current_device = check_for_drive_label()
-        if not current_device or current_device != device_path:
-            print("[+] Drive disappeared. Update likely successful.")
+        if not check_for_drive_label(indent=indent):
+            print(f"[+]{indent} Drive disappeared. Update likely successful.")
             return True
         time.sleep(1)
-    
-    print("[!] Drive did not disappear in time.")
+    print(f"[!]{indent} Drive did not disappear in time.")
     return False
 
 def convert_to_raw_url(github_url):
+    """Converts a GitHub blob URL to a raw content URL."""
     if "github.com" in github_url and "/blob/" in github_url:
-        return github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+        raw_url = github_url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+        print(f"[*] Converted GitHub URL to raw content URL: {raw_url}")
+        return raw_url
     return github_url
 
 def flash_firmware_with_retry(firmware_file, device_path, max_retries=UF2_FLASH_RETRIES, indent=""):
-    """
-    Attempt to flash firmware with retry logic
-    Returns True if successful, False if all retries failed
-    """
+    """Attempt to flash firmware with retry logic."""
     for attempt in range(max_retries):
         print(f"[*]{indent} Firmware flash attempt {attempt + 1}/{max_retries}")
-        
-        # Mount the USB drive
-        mount_point = mount_drive(device_path)
+        mount_point = mount_drive(device_path, indent=indent)
         if not mount_point:
-            print(f"[!]{indent} Failed to mount USB drive on attempt {attempt + 1}")
             if attempt < max_retries - 1:
-                print(f"[*]{indent} Waiting 5 seconds before retry...")
                 time.sleep(5)
                 continue
-            else:
-                return False
+            return False
 
-        # Copy firmware to the mounted drive
         if not copy_firmware_to_drive(firmware_file, mount_point, indent=indent):
-            print(f"[!]{indent} Failed to copy firmware on attempt {attempt + 1}")
-            unmount_drive(mount_point)
+            unmount_drive(mount_point, indent=indent)
             if attempt < max_retries - 1:
-                print(f"[*]{indent} Waiting 5 seconds before retry...")
                 time.sleep(5)
                 continue
-            else:
-                return False
+            return False
 
-        # Wait for the drive to disappear (indicating successful flash)
-        if wait_for_drive_to_disappear(device_path):
+        # The drive unmounts automatically upon successful copy
+        # We wait for it to disappear.
+        if wait_for_drive_to_disappear(indent=indent):
             print(f"[+]{indent} Firmware flash successful on attempt {attempt + 1}!")
             return True
         else:
             print(f"[!]{indent} Drive did not disappear on attempt {attempt + 1}")
-            
-            # Try to unmount manually before retry
-            try:
-                unmount_drive(mount_point)
-            except:
-                pass
-            
+            unmount_drive(mount_point, indent=indent) # Force unmount if it's stuck
             if attempt < max_retries - 1:
-                print(f"[*]{indent} Retrying firmware upload in 5 seconds...")
                 time.sleep(5)
-                
-                # Check if drive is still there for next attempt
-                if not check_for_drive_label():
-                    print(f"[!]{indent} Drive disappeared during retry wait - this might actually be success!")
-                    return True
-            else:
-                print(f"[!]{indent} All {max_retries} firmware flash attempts failed")
-                return False
-    
+
+    print(f"[!]{indent} All {max_retries} firmware flash attempts failed.")
     return False
 
 def cleanup_mount_point():
-    """Clean up any existing mount"""
-    try:
-        if os.path.ismount(MOUNT_BASE):
-            unmount_drive(MOUNT_BASE)
-    except:
-        pass
+    """Clean up any existing mount."""
+    if os.path.ismount(MOUNT_BASE):
+        unmount_drive(MOUNT_BASE)
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("github_url", help="Direct link to UF2 file in public GitHub repo")
+    parser = argparse.ArgumentParser(description="Update firmware on an ESP32 device via UF2 bootloader.")
+    parser.add_argument("github_url", help="Direct link to the .uf2 file in a public GitHub repo.")
     args = parser.parse_args()
 
-    # Clean up any existing mounts
     cleanup_mount_point()
 
     github_url = convert_to_raw_url(args.github_url)
-
-    # Download firmware
-    download_firmware(github_url)
-
-    # Check if ESP32 is already in UF2 mode
-    print("[*] Checking if ESP32 is already in UF2 bootloader mode...")
-    existing_device = check_for_drive_label()
-    
-    if existing_device:
-        print(f"[+] ESP32 already in UF2 mode! Found drive at {existing_device}")
-        device_path = existing_device
-    else:
-        # ESP32 not in UF2 mode, trigger bootloader
-        serial_port = find_serial_port()
-        print(f"[*] Found serial port: {serial_port}")
-
-        # for victron gx, we need to stop the serial starter service
-        stop_serial_starter(serial_port)
-
-        # get the current firmware version
-        print("[*] Checking current firmware version...")
-        get_firmware_version(serial_port, indent="   |")
-
-        # Trigger bootloader by sending command
-        print("[*] Triggering bootloader...")
-        if not send_boot_command(serial_port, indent="   |"):
-            print("[!] Failed to trigger bootloader. Exiting.")
-            start_serial_starter(serial_port)
-            exit(1)
-
-        # Wait for the USB drive to appear after triggering bootloader
-        device_path = wait_for_usb_drive(indent="   |")
-        if not device_path:
-            print("[!] USB drive not detected after bootloader trigger. Exiting.")
-            start_serial_starter(serial_port)
-            exit(1)
-        
-        # Start the serial starter service again, as ESP32 is now in UF2 mode
-        start_serial_starter(serial_port)
-
-    # Mount the USB drive and flash firmware with retry logic
-    print("[*] Mounting USB drive and flashing firmware...")
-    if not flash_firmware_with_retry("firmware.uf2", device_path, indent="   |"):
-        print("[!] Firmware update failed after all retry attempts.")
-        print("[!] Consider rebooting Raspberry Pi or checking ESP32 connection...")
-        # Uncomment the line below if you want automatic reboot as fallback
-        # subprocess.run(["sudo", "reboot"])
+    if not download_firmware(github_url):
         exit(1)
 
-    print("[*] Checking firmware version after update...")
-    time.sleep(1)
-    try:
-        serial_port = find_serial_port(indent="   |")
-    except IndexError:
-        print("[*]   | Retrying")
-        time.sleep(3)  # Give some time for the ESP32 to reboot
-        # Find serial port and get firmware version
-        serial_port = find_serial_port()
+    print("[*] Checking for ESP32 device...")
+    device_path = check_for_drive_label()
+    serial_port = None
     
-    get_firmware_version(serial_port, indent="   |")
+    if device_path:
+        print(f"[+] ESP32 already in UF2 mode! Found drive at {device_path}")
+    else:
+        try:
+            serial_port = find_serial_port()
+            print(f"[*] Found serial port: {serial_port}")
+            stop_serial_starter(serial_port, indent="  |")
+            print("[*] Checking current firmware version...")
+            get_firmware_version(serial_port, indent="  |")
+            print("[*] Triggering bootloader...")
+            if not send_boot_command(serial_port, indent="  |"):
+                print("[!] Failed to trigger bootloader. Exiting.")
+                start_serial_starter(serial_port, indent="  |")
+                exit(1)
+            device_path = wait_for_usb_drive(indent="  |")
+            if not device_path:
+                print("[!] USB drive not detected after bootloader trigger. Exiting.")
+                start_serial_starter(serial_port, indent="  |")
+                exit(1)
+        except IndexError:
+            print("[!] No serial port found and device not in UF2 mode. Is it connected?")
+            exit(1)
+
+    print("[*] Starting firmware flash process...")
+    if not flash_firmware_with_retry("firmware.uf2", device_path, indent="  |"):
+        print("[!] Firmware update failed after all attempts.")
+        exit(1)
+
+    print("[+] Firmware update process completed.")
+    print("[*] Waiting for device to reboot and appear on serial port...")
+    time.sleep(5)
+    
+    try:
+        serial_port = find_serial_port(indent="  |")
+        print(f"[*] Found new serial port: {serial_port}")
+        stop_serial_starter(serial_port, indent="  |")
+        print("[*] Checking new firmware version...")
+        get_firmware_version(serial_port, indent="  |")
+        start_serial_starter(serial_port, indent="  |")
+    except IndexError:
+        print("[!] Could not find serial port after update. Please check the device manually.")
 
 if __name__ == "__main__":
     main()
