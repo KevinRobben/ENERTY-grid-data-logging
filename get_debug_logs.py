@@ -58,7 +58,7 @@ def get_logs(serial_port, indent=""):
                 ser.reset_input_buffer()
                 
                 print(f"[*]{indent} Attempt {attempt + 1}/{MAX_LOG_RETRIES}: Sending '$K' to ESP32...")
-                ser.write(b'$K')
+                ser.write(b'$E')
                 ser.flush()
                 
                 time.sleep(0.5) 
